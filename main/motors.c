@@ -1,7 +1,6 @@
 #include <lfw_esp/motors.h>
 
 #include <esp_log.h>
-#include <error_check_return.h>
 #include <driver/gpio.h>
 #include <driver/ledc.h>
 
@@ -15,7 +14,7 @@
 #define MOTOR_2_B GPIO_NUM_23
 
 
-int motors_init(void)
+void motors_init(void)
 {
     // configure enable pins
 
@@ -27,7 +26,7 @@ int motors_init(void)
         .clk_cfg = LEDC_APB_CLK,
     };
 
-    ESP_ERROR_CHECK_RETURN(ledc_timer_config(&timer_conf));
+    ESP_ERROR_CHECK(ledc_timer_config(&timer_conf));
 
     ledc_channel_config_t channel_conf = {
         .gpio_num = MOTOR_1_EN,
@@ -39,11 +38,11 @@ int motors_init(void)
         .hpoint = 0,
     };
 
-    ESP_ERROR_CHECK_RETURN(ledc_channel_config(&channel_conf));
+    ESP_ERROR_CHECK(ledc_channel_config(&channel_conf));
 
     channel_conf.gpio_num = MOTOR_2_EN;
     channel_conf.channel = LEDC_CHANNEL_1;
-    ESP_ERROR_CHECK_RETURN(ledc_channel_config(&channel_conf));
+    ESP_ERROR_CHECK(ledc_channel_config(&channel_conf));
 
     // configure direction pins
 
@@ -59,11 +58,9 @@ int motors_init(void)
         .intr_type = GPIO_INTR_DISABLE,
     };
 
-    ESP_ERROR_CHECK_RETURN(gpio_config(&io_conf));
-    ESP_ERROR_CHECK_RETURN(gpio_set_level(MOTOR_1_A, 0));
-    ESP_ERROR_CHECK_RETURN(gpio_set_level(MOTOR_2_A, 0));
-
-    return 0;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    ESP_ERROR_CHECK(gpio_set_level(MOTOR_1_A, 0));
+    ESP_ERROR_CHECK(gpio_set_level(MOTOR_2_A, 0));
 }
 
 void motors_set_speed(int left, int right)

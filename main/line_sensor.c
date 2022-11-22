@@ -4,7 +4,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
-#include <error_check_return.h>
 #include <driver/gpio.h>
 
 
@@ -48,12 +47,12 @@ static void IRAM_ATTR gpio_isr_handler(void *arg)
     g_state.n_readings++;
 }
 
-int line_sensor_init(void)
+void line_sensor_init(void)
 {
     if (!portGET_RUN_TIME_COUNTER_VALUE())
     {
         ESP_LOGE(TAG, "ccount not available");
-        return -1;
+        ESP_ERROR_CHECK(ESP_ERR_NOT_SUPPORTED);
     }
 
     gpio_config_t io_conf = {};
@@ -62,21 +61,19 @@ int line_sensor_init(void)
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
         io_conf.pin_bit_mask |= 1ULL << g_gpios[i];
-        ESP_ERROR_CHECK_RETURN(gpio_set_level(g_gpios[i], 1));
+        ESP_ERROR_CHECK(gpio_set_level(g_gpios[i], 1));
     }
-    ESP_ERROR_CHECK_RETURN(gpio_config(&io_conf));
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    ESP_ERROR_CHECK_RETURN(gpio_install_isr_service(ESP_INTR_FLAG_IRAM));
+    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_IRAM));
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
-        ESP_ERROR_CHECK_RETURN(gpio_isr_handler_add(
+        ESP_ERROR_CHECK(gpio_isr_handler_add(
             g_gpios[i],
             gpio_isr_handler,
             (void*) i
         ));
     }
-
-    return 0;
 }
 
 void line_sensor_measurement(line_sensor_measurement_t *measurement)

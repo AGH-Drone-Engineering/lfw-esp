@@ -13,7 +13,7 @@ typedef struct {
 } line_sensor_measurement_t;
 
 
-int line_sensor_init(void);
+void line_sensor_init(void);
 
 void line_sensor_measurement(line_sensor_measurement_t *measurement);
 
