@@ -3,14 +3,14 @@
 
 
 typedef struct {
-    int kp;
-    int kd;
+    float kp;
+    float kd;
 
-    int last_error;
-} pid_t;
+    float last_error;
+} pid_state_t;
 
 
-int pid_update(pid_t *pid, int error, int dt);
+float pid_update(pid_state_t *pid, float error, float dt);
 
 
 #endif

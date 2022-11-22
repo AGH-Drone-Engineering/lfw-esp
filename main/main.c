@@ -4,6 +4,7 @@
 
 #include <lfw_esp/line_sensor.h>
 #include <lfw_esp/motors.h>
+#include <lfw_esp/control_loop.h>
 
 
 static const char TAG[] = "main";
@@ -15,6 +16,8 @@ void app_main(void)
 
     line_sensor_init();
     motors_init();
+
+    control_loop_start();
 
     ESP_LOGW(TAG, "LFW running");
 }

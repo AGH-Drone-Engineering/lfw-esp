@@ -1,15 +1,15 @@
 #include <lfw_esp/pid.h>
 
 
-int pid_update(pid_t *pid, int error, int dt)
+float pid_update(pid_state_t *pid, float error, float dt)
 {
-    int oP = -(pid->kp * error) >> 8;
+    float oP = -pid->kp * error;
 
-    int oD = 0;
+    float oD = 0;
     if (dt > 0) {
-        int dE = error - pid->last_error;
+        float dE = error - pid->last_error;
         pid->last_error = error;
-        oD = -(pid->kd * dE) / dt;
+        oD = -pid->kd * dE / dt;
     }
 
     return oP + oD;

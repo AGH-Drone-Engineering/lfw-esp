@@ -7,8 +7,11 @@
 #include <driver/gpio.h>
 
 
+#define LINE_SENSOR_N (8)
 #define SENSOR_SETTLE_DELAY_US (10)
 #define SENSOR_TIMEOUT_US (1000)
+#define ON_LINE_THRESHOLD (10000)
+#define NOISE_THRESHOLD (ON_LINE_THRESHOLD / 4)
 
 
 static const char TAG[] = "line_sensor";
@@ -47,6 +50,43 @@ static void IRAM_ATTR gpio_isr_handler(void *arg)
     g_state.n_readings++;
 }
 
+static void update_line_position(float *position)
+{
+    float avg = 0.0f;
+    float sum = 0.0f;
+    bool onLine = false;
+
+    for (int i = 0; i < LINE_SENSOR_N; i++)
+    {
+        float v = g_state.pulse_lengths[i] / (float) ON_LINE_THRESHOLD;
+
+        if (v > 1.0f)
+        {
+            onLine = true;
+        }
+
+        if (v > 0.25f)
+        {
+            avg += i * v;
+            sum += v;
+        }
+    }
+
+    if (!onLine)
+    {
+        if (old_position < 0)
+        {
+            return -1.0f;
+        }
+        else
+        {
+            return 1.0f;
+        }
+    }
+
+    return avg / sum - (LINE_SENSOR_N - 1) / 2.0f;
+}
+
 void line_sensor_init(void)
 {
     if (!portGET_RUN_TIME_COUNTER_VALUE())
@@ -76,7 +116,7 @@ void line_sensor_init(void)
     }
 }
 
-void line_sensor_measurement(line_sensor_measurement_t *measurement)
+void line_sensor_measurement(float *line_position)
 {
     while (g_state.n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_state.read_start < SENSOR_TIMEOUT_US);
 
@@ -89,7 +129,7 @@ void line_sensor_measurement(line_sensor_measurement_t *measurement)
 
     ets_delay_us(SENSOR_SETTLE_DELAY_US);
 
-    memcpy((void*) measurement->values, (void*) g_state.pulse_lengths, sizeof(g_state.pulse_lengths));
+    update_line_position(line_position);
 
     portENTER_CRITICAL(&g_state.gpio_mux);
     g_state.read_start = (uint32_t) esp_timer_get_time();
