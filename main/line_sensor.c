@@ -3,6 +3,7 @@
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <esp_log.h>
 #include <driver/gpio.h>
 
@@ -10,7 +11,7 @@
 #define LINE_SENSOR_N (8)
 #define SENSOR_SETTLE_DELAY_US (10)
 #define SENSOR_TIMEOUT_US (1000)
-#define ON_LINE_THRESHOLD (10000)
+#define ON_LINE_THRESHOLD (1000000)
 #define NOISE_THRESHOLD (ON_LINE_THRESHOLD / 4)
 
 
@@ -27,27 +28,25 @@ static const gpio_num_t g_gpios[LINE_SENSOR_N] = {
     GPIO_NUM_16,
 };
 
-static struct {
-    portMUX_TYPE gpio_mux;
-    uint32_t read_start;
-    uint32_t read_starts[LINE_SENSOR_N];
-    volatile uint32_t pulse_lengths[LINE_SENSOR_N];
-    volatile int n_readings;
-} g_state = {
-    .gpio_mux = portMUX_INITIALIZER_UNLOCKED,
-    .read_start = 0,
-    .read_starts = {0},
-    .pulse_lengths = {0},
-    .n_readings = 0,
-};
+static uint32_t g_read_start = 0;
+static uint32_t g_read_starts[LINE_SENSOR_N] = {0};
+static volatile uint32_t g_pulse_lengths[LINE_SENSOR_N] = {0};
+static volatile int g_n_readings = 0;
+static SemaphoreHandle_t g_sem;
 
 
 static void IRAM_ATTR gpio_isr_handler(void *arg)
 {
     uint32_t now = portGET_RUN_TIME_COUNTER_VALUE();
     uint32_t sensor_id = (uint32_t) arg;
-    g_state.pulse_lengths[sensor_id] = now - g_state.read_starts[sensor_id];
-    g_state.n_readings++;
+    g_pulse_lengths[sensor_id] = now - g_read_starts[sensor_id];
+    g_n_readings++;
+    if (g_n_readings == LINE_SENSOR_N)
+    {
+        BaseType_t woken = pdFALSE;
+        xSemaphoreGiveFromISR(g_sem, &woken);
+        if (woken) portYIELD_FROM_ISR();
+    }
 }
 
 static void update_line_position(float *position)
@@ -58,7 +57,7 @@ static void update_line_position(float *position)
 
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
-        float v = g_state.pulse_lengths[i] / (float) ON_LINE_THRESHOLD;
+        float v = g_pulse_lengths[i] / (float) ON_LINE_THRESHOLD;
 
         if (v > 1.0f)
         {
@@ -74,17 +73,12 @@ static void update_line_position(float *position)
 
     if (!onLine)
     {
-        if (old_position < 0)
-        {
-            return -1.0f;
-        }
-        else
-        {
-            return 1.0f;
-        }
+        *position = *position < 0 ? -1.0f : 1.0f;
     }
-
-    return avg / sum - (LINE_SENSOR_N - 1) / 2.0f;
+    else
+    {
+        *position = avg / sum - (LINE_SENSOR_N - 1) / 2.0f;
+    }
 }
 
 void line_sensor_init(void)
@@ -94,6 +88,8 @@ void line_sensor_init(void)
         ESP_LOGE(TAG, "ccount not available");
         ESP_ERROR_CHECK(ESP_ERR_NOT_SUPPORTED);
     }
+
+    vSemaphoreCreateBinary(g_sem);
 
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
@@ -118,25 +114,30 @@ void line_sensor_init(void)
 
 void line_sensor_measurement(float *line_position)
 {
-    while (g_state.n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_state.read_start < SENSOR_TIMEOUT_US);
+    static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
-    portENTER_CRITICAL(&g_state.gpio_mux);
+    xSemaphoreTake(g_sem, 1);
+    // while (g_state.n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_state.read_start < SENSOR_TIMEOUT_US)
+        // portYIELD();
+
+    portENTER_CRITICAL(&mux);
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
         gpio_set_direction(g_gpios[i], GPIO_MODE_OUTPUT);
     }
-    portEXIT_CRITICAL(&g_state.gpio_mux);
+    portEXIT_CRITICAL(&mux);
 
     ets_delay_us(SENSOR_SETTLE_DELAY_US);
 
     update_line_position(line_position);
 
-    portENTER_CRITICAL(&g_state.gpio_mux);
-    g_state.read_start = (uint32_t) esp_timer_get_time();
+    portENTER_CRITICAL(&mux);
+    g_read_start = (uint32_t) esp_timer_get_time();
+    g_n_readings = 0;
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
-        g_state.read_starts[i] = portGET_RUN_TIME_COUNTER_VALUE();
+        g_read_starts[i] = portGET_RUN_TIME_COUNTER_VALUE();
         gpio_set_direction(g_gpios[i], GPIO_MODE_INPUT);
     }
-    portEXIT_CRITICAL(&g_state.gpio_mux);
+    portEXIT_CRITICAL(&mux);
 }
