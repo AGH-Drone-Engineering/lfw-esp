@@ -31,6 +31,7 @@ static const char TAG[] = "tcp_server";
 typedef enum message_type_t {
     MESSAGE_MOTORS,
     MESSAGE_ANGLE,
+    MESSAGE_TURN,
 } message_type_t;
 
 typedef struct message_t {
@@ -42,6 +43,7 @@ typedef struct message_t {
             int right;
         } motors;
         int angle;
+        int turn;
     };
 } message_t;
 
@@ -127,6 +129,11 @@ static void tcp_send_task(void *pv)
 
                 case MESSAGE_ANGLE:
                     sprintf(buf, "%u;angle;%d\n", msg.timestamp, msg.angle);
+                    tcp_send(buf);
+                    break;
+
+                case MESSAGE_TURN:
+                    sprintf(buf, "%u;pid_response;%d\n", msg.timestamp, msg.turn);
                     tcp_send(buf);
                     break;
 
@@ -269,6 +276,23 @@ void tcp_server_send_angle(int angle)
         .type = MESSAGE_ANGLE,
         .timestamp = ticks,
         .angle = angle,
+    };
+
+    xQueueSend(g_send_queue, &msg, 0);
+}
+
+void tcp_server_send_turn(int turn)
+{
+    static TickType_t last_send = 0;
+
+    TickType_t ticks = xTaskGetTickCount();
+    if (ticks - last_send < 10) return;
+    last_send = ticks;
+
+    message_t msg = {
+        .type = MESSAGE_TURN,
+        .timestamp = ticks,
+        .turn = turn,
     };
 
     xQueueSend(g_send_queue, &msg, 0);

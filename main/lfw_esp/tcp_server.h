@@ -10,5 +10,7 @@ void tcp_server_send_motors(int left, int right);
 
 void tcp_server_send_angle(int angle);
 
+void tcp_server_send_turn(int turn);
+
 
 #endif

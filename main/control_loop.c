@@ -40,6 +40,7 @@ static void control_loop_task(void *pv)
         motors_set_speed(left, right);
 
         tcp_server_send_angle(line_position * 1000);
+        tcp_server_send_turn(output * 1000);
         tcp_server_send_motors(left, right);
     }
 }
