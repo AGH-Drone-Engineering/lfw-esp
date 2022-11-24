@@ -4,5 +4,9 @@
 
 float turn_pid_update(float error, float dt);
 
+void turn_pid_set_p(float p);
+
+void turn_pid_set_d(float d);
+
 
 #endif

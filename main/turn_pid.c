@@ -21,3 +21,13 @@ float turn_pid_update(float error, float dt)
 
     return oP + oD;
 }
+
+void turn_pid_set_p(float p)
+{
+    g_kp = p;
+}
+
+void turn_pid_set_d(float d)
+{
+    g_kd = d;
+}
