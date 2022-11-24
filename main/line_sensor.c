@@ -89,7 +89,7 @@ void line_sensor_init(void)
         ESP_ERROR_CHECK(ESP_ERR_NOT_SUPPORTED);
     }
 
-    vSemaphoreCreateBinary(g_sem);
+    g_sem = xSemaphoreCreateBinary();
 
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
