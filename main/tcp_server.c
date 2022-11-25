@@ -24,6 +24,7 @@
 #define KEEPALIVE_IDLE              5
 #define KEEPALIVE_INTERVAL          5
 #define KEEPALIVE_COUNT             3
+#define SEND_DELAY                  100
 
 
 static const char TAG[] = "tcp_server";
@@ -47,23 +48,18 @@ typedef struct message_t {
     };
 } message_t;
 
-static volatile int g_sock = -1;
-static SemaphoreHandle_t g_sock_sem;
+static QueueHandle_t g_sock;
 static QueueHandle_t g_send_queue;
 
 
-static void tcp_recv_loop()
+static void tcp_recv_loop(int sock)
 {
     int len;
     char rx_buffer[256];
 
     do
     {
-        while (xSemaphoreTake(g_sock_sem, portMAX_DELAY) != pdTRUE);
-
-        len = recv(g_sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-
-        xSemaphoreGive(g_sock_sem);
+        len = recv(sock, rx_buffer, sizeof(rx_buffer), 0);
 
         if (len < 0)
         {
@@ -83,13 +79,13 @@ static void tcp_recv_loop()
     } while (len > 0);
 }
 
-static void tcp_send(const char buf[])
+static void tcp_send(int sock, const char buf[])
 {
     int to_write = strlen(buf);
     int written = 0;
     while (to_write > 0)
     {
-        int ret = send(g_sock, buf + written, to_write, 0);
+        int ret = send(sock, buf + written, to_write, 0);
         if (ret < 0)
         {
             ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
@@ -104,45 +100,37 @@ static void tcp_send_task(void *pv)
 {
     message_t msg;
     char buf[256];
+    int sock;
 
     for (;;)
     {   
         if (xQueueReceive(g_send_queue, &msg, portMAX_DELAY) == pdTRUE)
         {
-            if (xSemaphoreTake(g_sock_sem, portMAX_DELAY) != pdTRUE)
-                continue;
-
-            if (g_sock < 0)
-            {
-                xSemaphoreGive(g_sock_sem);
-                continue;
-            }
+            if (xQueuePeek(g_sock, &sock, 0) != pdTRUE) continue;
 
             switch (msg.type)
             {
                 case MESSAGE_MOTORS:
-                    sprintf(buf, "%u;motors_left;%d\n", msg.timestamp, msg.motors.left);
-                    tcp_send(buf);
-                    sprintf(buf, "%u;motors_right;%d\n", msg.timestamp, msg.motors.right);
-                    tcp_send(buf);
+                    sprintf(buf, "%u;left_motor;%d\n", msg.timestamp, msg.motors.left);
+                    tcp_send(sock, buf);
+                    sprintf(buf, "%u;right_motor;%d\n", msg.timestamp, msg.motors.right);
+                    tcp_send(sock, buf);
                     break;
 
                 case MESSAGE_ANGLE:
                     sprintf(buf, "%u;angle;%d\n", msg.timestamp, msg.angle);
-                    tcp_send(buf);
+                    tcp_send(sock, buf);
                     break;
 
                 case MESSAGE_TURN:
                     sprintf(buf, "%u;pid_response;%d\n", msg.timestamp, msg.turn);
-                    tcp_send(buf);
+                    tcp_send(sock, buf);
                     break;
 
                 default:
                     ESP_LOGW(TAG, "Unknown message type: %d", msg.type);
                     break;
             }
-
-            xSemaphoreGive(g_sock_sem);
         }
     }
 }
@@ -201,47 +189,41 @@ static void tcp_server_task(void *pv)
         struct sockaddr_storage source_addr;
         socklen_t addr_len = sizeof(source_addr);
 
-        while (xSemaphoreTake(g_sock_sem, portMAX_DELAY) != pdTRUE);
-
-        g_sock = accept(listen_sock, (struct sockaddr *) &source_addr, &addr_len);
-        if (g_sock < 0)
+        int sock = accept(listen_sock, (struct sockaddr *) &source_addr, &addr_len);
+        if (sock < 0)
         {
             ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-            xSemaphoreGive(g_sock_sem);
             continue;
         }
 
-        setsockopt(g_sock, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, sizeof(int));
-        setsockopt(g_sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
-        setsockopt(g_sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
-        setsockopt(g_sock, IPPROTO_TCP, TCP_KEEPCNT, &keepCount, sizeof(int));
+        setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, sizeof(int));
+        setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
+        setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
+        setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keepCount, sizeof(int));
 
         ESP_LOGI(TAG, "Socket accepted");
 
-        xSemaphoreGive(g_sock_sem);
+        xQueueOverwrite(g_sock, &sock);
 
-        tcp_recv_loop();
+        tcp_recv_loop(sock);
 
-        while (xSemaphoreTake(g_sock_sem, portMAX_DELAY) != pdTRUE);
+        while (xQueueReceive(g_sock, &sock, portMAX_DELAY) != pdTRUE);
 
-        shutdown(g_sock, 0);
-        close(g_sock);
-        g_sock = -1;
-
-        xSemaphoreGive(g_sock_sem);
+        shutdown(sock, 0);
+        close(sock);
     }
 }
 
 void tcp_server_init(void)
 {
     g_send_queue = xQueueCreate(32, sizeof(message_t));
-    g_sock_sem = xSemaphoreCreateMutex();
+    g_sock = xQueueCreate(1, sizeof(int));
 }
 
 void tcp_server_start(void)
 {
-    xTaskCreate(tcp_server_task, "tcp_recv", 4096, NULL, 5, NULL);
-    xTaskCreate(tcp_send_task, "tcp_send", 4096, NULL, 5, NULL);
+    xTaskCreatePinnedToCore(tcp_server_task, "tcp_recv", 4096, NULL, 6, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(tcp_send_task, "tcp_send", 4096, NULL, 5, NULL, APP_CPU_NUM);
 }
 
 void tcp_server_send_motors(int left, int right)
@@ -249,7 +231,7 @@ void tcp_server_send_motors(int left, int right)
     static TickType_t last_send = 0;
 
     TickType_t ticks = xTaskGetTickCount();
-    if (ticks - last_send < 10) return;
+    if (ticks - last_send < SEND_DELAY) return;
     last_send = ticks;
 
     message_t msg = {
@@ -269,7 +251,7 @@ void tcp_server_send_angle(int angle)
     static TickType_t last_send = 0;
 
     TickType_t ticks = xTaskGetTickCount();
-    if (ticks - last_send < 10) return;
+    if (ticks - last_send < SEND_DELAY) return;
     last_send = ticks;
 
     message_t msg = {
@@ -286,7 +268,7 @@ void tcp_server_send_turn(int turn)
     static TickType_t last_send = 0;
 
     TickType_t ticks = xTaskGetTickCount();
-    if (ticks - last_send < 10) return;
+    if (ticks - last_send < SEND_DELAY) return;
     last_send = ticks;
 
     message_t msg = {
