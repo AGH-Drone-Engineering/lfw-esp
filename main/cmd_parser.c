@@ -4,6 +4,8 @@
 #include <string.h>
 
 #include <lfw_esp/turn_pid.h>
+#include <lfw_esp/control_loop.h>
+#include <lfw_esp/turbine.h>
 
 
 static const char TAG[] = "cmd_parser";
@@ -14,23 +16,41 @@ typedef enum state_t {
 } state_t;
 
 static state_t g_state = STATE_TYPE;
-static char g_type[64] = {0};
+static char g_type[256] = {0};
+static char g_data[256] = {0};
 static int g_index = 0;
-static int g_data = 0;
-static bool g_negative = false;
 
 
 static void cmd_parser_accept()
 {
+    char *endptr;
+    int data = strtol(g_data, &endptr, 10);
+    if (*endptr) return;
+
     if (!strcmp(g_type, "Set P"))
     {
-        turn_pid_set_p(g_data / 1000.f);
-        ESP_LOGI(TAG, "Set P to %d", g_data);
+        turn_pid_set_p(data / 1000.f);
+        ESP_LOGI(TAG, "Set P to %d", data);
     }
     else if (!strcmp(g_type, "Set D"))
     {
-        turn_pid_set_d(g_data / 1000.f);
-        ESP_LOGI(TAG, "Set D to %d", g_data);
+        turn_pid_set_d(data / 1000.f);
+        ESP_LOGI(TAG, "Set D to %d", data);
+    }
+    else if (!strcmp(g_type, "Set forward"))
+    {
+        control_loop_set_forward(data / 1000.f);
+        ESP_LOGI(TAG, "Set forward to %d", data);
+    }
+    else if (!strcmp(g_type, "Enable"))
+    {
+        control_loop_set_enable(data);
+        ESP_LOGI(TAG, "Set enable to %d", data);
+    }
+    else if (!strcmp(g_type, "Turbine"))
+    {
+        turbine_set_speed(data);
+        ESP_LOGI(TAG, "Set turbine to %d", data);
     }
     else
     {
@@ -40,15 +60,13 @@ static void cmd_parser_accept()
 
 void cmd_parser_feed(char c)
 {
-    // message format: type;data\n
     switch (g_state)
     {
         case STATE_TYPE:
             if (c == ';')
             {
                 g_type[g_index] = '\0';
-                g_data = 0;
-                g_negative = false;
+                g_index = 0;
                 g_state = STATE_DATA;
             }
             else
@@ -61,19 +79,15 @@ void cmd_parser_feed(char c)
         case STATE_DATA:
             if (c == '\n')
             {
-                if (g_negative)
-                    g_data = -g_data;
+                g_data[g_index] = '\0';
                 cmd_parser_accept();
                 g_index = 0;
                 g_state = STATE_TYPE;
             }
-            else if (c == '-')
-            {
-                g_negative = true;
-            }
             else
             {
-                g_data = g_data * 10 + (c - '0');
+                g_data[g_index] = c;
+                g_index++;
             }
             break;
     }
