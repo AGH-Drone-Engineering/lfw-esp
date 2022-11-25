@@ -8,5 +8,6 @@ idf_component_register(
         wifi_man.c
         tcp_server.c
         cmd_parser.c
+        turbine.c
     INCLUDE_DIRS .
 )
