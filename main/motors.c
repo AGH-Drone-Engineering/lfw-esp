@@ -10,8 +10,8 @@
 #define MOTOR_1_B GPIO_NUM_19
 
 #define MOTOR_2_EN GPIO_NUM_21
-#define MOTOR_2_A GPIO_NUM_22
-#define MOTOR_2_B GPIO_NUM_23
+#define MOTOR_2_A GPIO_NUM_23
+#define MOTOR_2_B GPIO_NUM_22
 
 
 void motors_init(void)
