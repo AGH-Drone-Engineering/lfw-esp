@@ -14,6 +14,7 @@
 #include <lfw_esp/control_loop.h>
 #include <lfw_esp/wifi_man.h>
 #include <lfw_esp/tcp_server.h>
+#include <lfw_esp/turbine.h>
 
 
 static const char TAG[] = "main";
@@ -36,7 +37,9 @@ void app_main(void)
 
     line_sensor_init();
     motors_init();
+    turbine_init();
     tcp_server_init();
+    control_loop_init();
 
     wifi_man_start();
     tcp_server_start();
