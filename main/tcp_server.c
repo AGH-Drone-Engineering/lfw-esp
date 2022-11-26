@@ -24,7 +24,7 @@
 #define KEEPALIVE_IDLE         5
 #define KEEPALIVE_INTERVAL     5
 #define KEEPALIVE_COUNT        3
-#define SEND_DELAY_MS          100
+#define SEND_DELAY_MS          300
 
 
 static const char TAG[] = "tcp_server";
