@@ -97,28 +97,8 @@ void control_loop_init(void)
 
 void control_loop_calibrate(void)
 {
-    uint32_t start;
-
     ESP_LOGI(TAG, "Running calibration");
-
-    motors_set_speed(-CALIBRATION_SWEEP_SPEED, CALIBRATION_SWEEP_SPEED);
-
-    start = esp_timer_get_time();
-    while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
-    {
-        line_sensor_calibrate();
-    }
-
-    motors_set_speed(CALIBRATION_SWEEP_SPEED, -CALIBRATION_SWEEP_SPEED);
-
-    start = esp_timer_get_time();
-    while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
-    {
-        line_sensor_calibrate();
-    }
-
-    motors_set_speed(0, 0);
-
+    line_sensor_calibrate();
     ESP_LOGI(TAG, "Calibrated");
 }
 
