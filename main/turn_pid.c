@@ -14,7 +14,7 @@ static uint32_t g_last_time = 0;
 float turn_pid_update(float error)
 {
     uint32_t time = portGET_RUN_TIME_COUNTER_VALUE();
-    float dt = (time - g_last_time) / 655.f;
+    float dt = (time - g_last_time) / 6553600.f;
     g_last_time = time;
 
     float oP = -g_kp * error;
