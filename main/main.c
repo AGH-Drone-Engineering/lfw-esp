@@ -33,7 +33,7 @@ static void core1_main(void *pv)
     xSemaphoreGive(g_core1_init_done);
 
     ESP_LOGW(TAG, "Will calibrate");
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     control_loop_calibrate();
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
