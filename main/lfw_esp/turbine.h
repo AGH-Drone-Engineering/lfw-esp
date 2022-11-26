@@ -4,6 +4,8 @@
 
 void turbine_init(void);
 
+void turbine_start(void);
+
 void turbine_set_speed(int speed);
 
 

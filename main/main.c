@@ -67,6 +67,7 @@ void app_main(void)
 
     while (xSemaphoreTake(g_core1_init_done, portMAX_DELAY) != pdTRUE);
     
+    turbine_start();
     wifi_man_start();
     tcp_server_start();
 }
