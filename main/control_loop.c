@@ -48,7 +48,7 @@ static void control_loop_task(void *pv)
         error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
         off_line = error < -0.9 || error > 0.9;
 
-        ESP_LOGI(TAG, "Line: %f", error);
+        // ESP_LOGI(TAG, "Line: %f", error);
 
         output = turn_pid_update(error);
 

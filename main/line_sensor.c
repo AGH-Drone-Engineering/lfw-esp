@@ -56,7 +56,7 @@ static void update_line_position(uint32_t *position, const uint32_t values[])
     uint32_t sum = 0;
     bool onLine = false;
 
-    for (int i = 0; i < LINE_SENSOR_N * 1024; i += 1024)
+    for (int i = 0; i < LINE_SENSOR_N; i++)
     {
         uint32_t v = values[i];
 
@@ -64,7 +64,7 @@ static void update_line_position(uint32_t *position, const uint32_t values[])
 
         if (v > NOISE_THRESHOLD)
         {
-            avg += i * v;
+            avg += i * v << 10;
             sum += v;
         }
     }
