@@ -89,17 +89,22 @@ static void sensor_read(uint32_t values[])
     while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start < SENSOR_TIMEOUT_US);
 
     // raise all pins and wait for remaining interrupts to settle
-    portENTER_CRITICAL(&mux);
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
+        gpio_intr_disable(g_gpios[i]);
         gpio_set_direction(g_gpios[i], GPIO_MODE_OUTPUT);
     }
-    portEXIT_CRITICAL(&mux);
 
     ets_delay_us(SENSOR_SETTLE_DELAY_US);
 
     // no more interrupts will trigger, safe to read
     memcpy(values, g_pulse_lengths, sizeof(g_pulse_lengths));
+
+    // prepare interrupts
+    for (int i = 0; i < LINE_SENSOR_N; i++)
+    {
+        gpio_intr_enable(g_gpios[i]);
+    }
 
     // begin next reading
     portENTER_CRITICAL(&mux);
@@ -167,6 +172,7 @@ void line_sensor_init(void)
             gpio_isr_handler,
             (void*) i
         ));
+        ESP_ERROR_CHECK(gpio_intr_disable(g_gpios[i]));
     }
 }
 
