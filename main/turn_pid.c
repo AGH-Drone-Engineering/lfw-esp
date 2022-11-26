@@ -3,10 +3,11 @@
 #include <freertos/FreeRTOS.h>
 
 
-static float g_kp = 0.5f;
+static float g_kp = 0.0f;
 static float g_kd = 0.0f;
 
-static float g_last_error = 0.0f;
+static float g_last_error1 = 0.0f;
+static float g_last_error2 = 0.0f;
 static uint32_t g_last_time = 0;
 
 
@@ -21,8 +22,9 @@ float turn_pid_update(float error)
     float oD = 0;
     if (dt > 0)
     {
-        float dE = error - g_last_error;
-        g_last_error = error;
+        float dE = g_last_error2 - 4 * g_last_error1 + 3 * error;
+        g_last_error2 = g_last_error1;
+        g_last_error1 = error;
         oD = -g_kd * dE / dt;
     }
 
