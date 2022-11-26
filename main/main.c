@@ -43,6 +43,11 @@ void app_main(void)
 
     wifi_man_start();
     tcp_server_start();
+
+    ESP_LOGW(TAG, "Will calibrate");
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    control_loop_calibrate();
+
     control_loop_start();
 
     ESP_LOGW(TAG, "LFW running");

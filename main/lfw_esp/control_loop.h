@@ -4,6 +4,8 @@
 
 void control_loop_init(void);
 
+void control_loop_calibrate(void);
+
 void control_loop_start(void);
 
 void control_loop_set_forward(float speed);
