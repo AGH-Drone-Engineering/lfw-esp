@@ -27,25 +27,55 @@ static void control_loop_task(void *pv)
 {
     uint32_t line_position = 0;
 
+    float error;
+    bool off_line;
+
+    int enable;
+    float forward_speed;
+
+    float output;
+    float left_speed;
+    float right_speed;
+
+    int left;
+    int right;
+
     for (;;)
     {
         line_sensor_measurement(&line_position);
 
         // 0 centered, 1.0 max left/right
-        float error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
+        error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
+        off_line = error < -0.9 || error > 0.9;
 
-        float output = turn_pid_update(error);
+        output = turn_pid_update(error);
 
-        float forward_speed = 0.f;
-        int enable = 0;
-        xQueuePeek(g_enable, &enable, 0);
-        if (enable) xQueuePeek(g_forward_speed, &forward_speed, 0);
+        if (off_line)
+        {
+            if (error < 0)
+            {
+                left = -8191;
+                right = 0;
+            }
+            else
+            {
+                left = 0;
+                right = -8191;
+            }
+        }
+        else
+        {
+            forward_speed = 0.f;
+            enable = 0;
+            xQueuePeek(g_enable, &enable, 0);
+            if (enable) xQueuePeek(g_forward_speed, &forward_speed, 0);
 
-        float left_speed = forward_speed + output;
-        float right_speed = forward_speed - output;
+            left_speed = forward_speed + output;
+            right_speed = forward_speed - output;
 
-        int left = CLAMP((int) (left_speed * 4000), -8191, 8191);
-        int right = CLAMP((int) (right_speed * 4000), -8191, 8191);
+            left = CLAMP((int) (left_speed * 4000), -8191, 8191);
+            right = CLAMP((int) (right_speed * 4000), -8191, 8191);
+        }
 
         motors_set_speed(left, right);
 
