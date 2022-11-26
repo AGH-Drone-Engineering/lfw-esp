@@ -10,6 +10,7 @@
 #include <lfw_esp/line_sensor.h>
 #include <lfw_esp/turn_pid.h>
 #include <lfw_esp/tcp_server.h>
+#include <lfw_esp/turbine.h>
 
 
 #define CALIBRATION_SWEEP_TIME_US (1500 * 1000)
@@ -29,7 +30,9 @@ static void enable_task(void *pv)
     for (;;)
     {
         while (gpio_get_level(GPIO_NUM_0)) vTaskDelay(10);
-        vTaskDelay(3000 / portTICK_PERIOD_MS);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        turbine_set_speed(20);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         control_loop_set_enable(1);
     }
 }
@@ -78,8 +81,8 @@ static void control_loop_task(void *pv)
             }
             else
             {
-                left_speed = forward_speed;
-                right_speed = forward_speed - 2.f * output;
+                left_speed = 0;
+                right_speed = -output;
             }
         }
         else
@@ -91,8 +94,8 @@ static void control_loop_task(void *pv)
             }
             else
             {
-                left_speed = forward_speed + 2.f * output;
-                right_speed = forward_speed;
+                left_speed = output;
+                right_speed = 0;
             }
         }
 
@@ -120,9 +123,9 @@ void control_loop_init(void)
     io_conf.pin_bit_mask |= 1ULL << GPIO_NUM_0;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    control_loop_set_forward(0.691f);
-    turn_pid_set_p(0.471f);
-    turn_pid_set_d(0.17647f);
+    control_loop_set_forward(0.600f);
+    turn_pid_set_p(0.580f);
+    turn_pid_set_d(0.220f);
 }
 
 void control_loop_calibrate(void)
