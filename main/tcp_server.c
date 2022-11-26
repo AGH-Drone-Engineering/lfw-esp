@@ -20,11 +20,11 @@
 #include <lfw_esp/cmd_parser.h>
 
 
-#define PORT                        8888
-#define KEEPALIVE_IDLE              5
-#define KEEPALIVE_INTERVAL          5
-#define KEEPALIVE_COUNT             3
-#define SEND_DELAY                  100
+#define PORT                   8888
+#define KEEPALIVE_IDLE         5
+#define KEEPALIVE_INTERVAL     5
+#define KEEPALIVE_COUNT        3
+#define SEND_DELAY_MS          10
 
 
 static const char TAG[] = "tcp_server";
@@ -222,8 +222,8 @@ void tcp_server_init(void)
 
 void tcp_server_start(void)
 {
-    xTaskCreatePinnedToCore(tcp_server_task, "tcp_recv", 4096, NULL, 6, NULL, APP_CPU_NUM);
-    xTaskCreatePinnedToCore(tcp_send_task, "tcp_send", 4096, NULL, 5, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(tcp_server_task, "tcp_recv", 4096, NULL, 6, NULL, PRO_CPU_NUM);
+    xTaskCreatePinnedToCore(tcp_send_task, "tcp_send", 4096, NULL, 5, NULL, PRO_CPU_NUM);
 }
 
 void tcp_server_send_motors(int left, int right)
@@ -231,7 +231,7 @@ void tcp_server_send_motors(int left, int right)
     static TickType_t last_send = 0;
 
     TickType_t ticks = xTaskGetTickCount();
-    if (ticks - last_send < SEND_DELAY) return;
+    if (ticks - last_send < SEND_DELAY_MS / portTICK_PERIOD_MS) return;
     last_send = ticks;
 
     message_t msg = {
@@ -251,7 +251,7 @@ void tcp_server_send_angle(int angle)
     static TickType_t last_send = 0;
 
     TickType_t ticks = xTaskGetTickCount();
-    if (ticks - last_send < SEND_DELAY) return;
+    if (ticks - last_send < SEND_DELAY_MS / portTICK_PERIOD_MS) return;
     last_send = ticks;
 
     message_t msg = {
@@ -268,7 +268,7 @@ void tcp_server_send_turn(int turn)
     static TickType_t last_send = 0;
 
     TickType_t ticks = xTaskGetTickCount();
-    if (ticks - last_send < SEND_DELAY) return;
+    if (ticks - last_send < SEND_DELAY_MS / portTICK_PERIOD_MS) return;
     last_send = ticks;
 
     message_t msg = {
