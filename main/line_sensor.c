@@ -37,8 +37,8 @@ static uint32_t g_read_start = 0;
 static uint32_t g_pulse_lengths[LINE_SENSOR_N] = {0};
 static volatile int g_n_readings = LINE_SENSOR_N;
 
-static uint32_t g_calibration_min[LINE_SENSOR_N];
-static uint32_t g_calibration_max[LINE_SENSOR_N];
+static uint32_t g_calibration_min = -1;
+static uint32_t g_calibration_max = 0;
 static bool g_calibrated = false;
 
 
@@ -134,9 +134,9 @@ static void calibrate_reading(uint32_t values[])
     {
         for (int i = 0; i < LINE_SENSOR_N; i++)
         {
-            if (values[i] <= g_calibration_min[i]) values[i] = 0;
-            else if (values[i] >= g_calibration_max[i]) values[i] = 1024;
-            else values[i] = ((values[i] - g_calibration_min[i]) << 10) / (g_calibration_max[i] - g_calibration_min[i]);
+            if (values[i] <= g_calibration_min) values[i] = 0;
+            else if (values[i] >= g_calibration_max) values[i] = 1024;
+            else values[i] = ((values[i] - g_calibration_min) << 10) / (g_calibration_max - g_calibration_min);
         }
     }
 }
@@ -147,12 +147,6 @@ void line_sensor_init(void)
     {
         ESP_LOGE(TAG, "ccount not available");
         ESP_ERROR_CHECK(ESP_ERR_NOT_SUPPORTED);
-    }
-
-    for (int i = 0; i < LINE_SENSOR_N; i++)
-    {
-        g_calibration_min[i] = -1;
-        g_calibration_max[i] = 0;
     }
 
     gpio_config_t io_conf = {};
@@ -214,56 +208,17 @@ void line_sensor_measurement(uint32_t *line_position)
 
 void line_sensor_calibrate(void)
 {
-    uint32_t min[LINE_SENSOR_N];
-    uint32_t max[LINE_SENSOR_N];
     uint32_t values[LINE_SENSOR_N];
 
     for (int sample = 0; sample < CALIBRATION_SAMPLES; sample++)
     {
         sensor_read(values);
-
         for (int i = 0; i < LINE_SENSOR_N; i++)
         {
-            if (sample == 0)
-            {
-                min[i] = values[i];
-                max[i] = values[i];
-            }
-            else
-            {
-                if (values[i] < min[i]) min[i] = values[i];
-                if (values[i] > max[i]) max[i] = values[i];
-            }
+            if (values[i] < g_calibration_min) g_calibration_min = values[i];
+            if (values[i] > g_calibration_max) g_calibration_max = values[i];
         }
     }
 
-    for (int i = 0; i < LINE_SENSOR_N; i++)
-    {
-        if (min[i] > g_calibration_max[i]) g_calibration_max[i] = min[i];
-        if (max[i] < g_calibration_min[i]) g_calibration_min[i] = max[i];
-    }
-
     g_calibrated = true;
-
-    // ESP_LOGI(TAG, "Calib min: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
-    //     g_calibration_min[0],
-    //     g_calibration_min[1],
-    //     g_calibration_min[2],
-    //     g_calibration_min[3],
-    //     g_calibration_min[4],
-    //     g_calibration_min[5],
-    //     g_calibration_min[6],
-    //     g_calibration_min[7]
-    // );
-
-    // ESP_LOGI(TAG, "Calib max: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
-    //     g_calibration_max[0],
-    //     g_calibration_max[1],
-    //     g_calibration_max[2],
-    //     g_calibration_max[3],
-    //     g_calibration_max[4],
-    //     g_calibration_max[5],
-    //     g_calibration_max[6],
-    //     g_calibration_max[7]
-    // );
 }
