@@ -67,7 +67,7 @@ void control_loop_calibrate(void)
 
     ESP_LOGI(TAG, "Running calibration");
 
-    motors_set_speed(-CALIBRATION_SWEEP_SPEED, CALIBRATION_SWEEP_SPEED);
+    motors_set_speed(CALIBRATION_SWEEP_SPEED, CALIBRATION_SWEEP_SPEED);
 
     start = esp_timer_get_time();
     while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
@@ -75,7 +75,7 @@ void control_loop_calibrate(void)
         line_sensor_calibrate();
     }
 
-    motors_set_speed(CALIBRATION_SWEEP_SPEED, -CALIBRATION_SWEEP_SPEED);
+    motors_set_speed(-CALIBRATION_SWEEP_SPEED, -CALIBRATION_SWEEP_SPEED);
 
     start = esp_timer_get_time();
     while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
