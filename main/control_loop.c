@@ -29,6 +29,7 @@ static void enable_task(void *pv)
     for (;;)
     {
         while (gpio_get_level(GPIO_NUM_0)) vTaskDelay(10);
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
         control_loop_set_enable(1);
     }
 }
