@@ -3,7 +3,9 @@
 #include <freertos/FreeRTOS.h>
 
 
+// 471
 static float g_kp = 0.0f;
+// 17647
 static float g_kd = 0.0f;
 
 static float g_last_error1 = 0.0f;
@@ -14,7 +16,7 @@ static uint32_t g_last_time = 0;
 float turn_pid_update(float error)
 {
     uint32_t time = portGET_RUN_TIME_COUNTER_VALUE();
-    float dt = (time - g_last_time) / 65536.f;
+    float dt = (time - g_last_time) / 655.f;
     g_last_time = time;
 
     float oP = -g_kp * error;
