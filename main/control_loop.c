@@ -27,7 +27,8 @@ static void control_loop_task(void *pv)
 {
     uint32_t line_position = 0;
 
-    float error;
+    float error = 0.f;
+    float new_error;
     bool off_line;
 
     int enable;
@@ -45,8 +46,9 @@ static void control_loop_task(void *pv)
         line_sensor_measurement(&line_position);
 
         // 0 centered, 1.0 max left/right
-        error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
-        off_line = error < -0.9 || error > 0.9;
+        new_error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
+        error = 0.6f * error + 0.4f * new_error;
+        off_line = error < -0.9f || error > 0.9f;
 
         // ESP_LOGI(TAG, "Line: %f", error);
 
@@ -81,7 +83,7 @@ static void control_loop_task(void *pv)
 
         motors_set_speed(left, right);
 
-        tcp_server_send_angle(line_position * 1000);
+        tcp_server_send_angle(error * 1000);
         tcp_server_send_turn(output * 1000);
         tcp_server_send_motors(left, right);
     }
