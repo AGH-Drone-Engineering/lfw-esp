@@ -11,7 +11,7 @@
 #include <lfw_esp/tcp_server.h>
 
 
-#define CALIBRATION_SWEEP_TIME_US (1000 * 1000)
+#define CALIBRATION_SWEEP_TIME_US (1500 * 1000)
 #define CALIBRATION_SWEEP_SPEED (600)
 
 #define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
@@ -47,6 +47,8 @@ static void control_loop_task(void *pv)
         // 0 centered, 1.0 max left/right
         error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
         off_line = error < -0.9 || error > 0.9;
+
+        ESP_LOGI(TAG, "Line: %f", error);
 
         output = turn_pid_update(error);
 
@@ -97,7 +99,7 @@ void control_loop_calibrate(void)
 
     ESP_LOGI(TAG, "Running calibration");
 
-    motors_set_speed(CALIBRATION_SWEEP_SPEED, CALIBRATION_SWEEP_SPEED);
+    motors_set_speed(-CALIBRATION_SWEEP_SPEED, CALIBRATION_SWEEP_SPEED);
 
     start = esp_timer_get_time();
     while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
@@ -105,7 +107,7 @@ void control_loop_calibrate(void)
         line_sensor_calibrate();
     }
 
-    motors_set_speed(-CALIBRATION_SWEEP_SPEED, -CALIBRATION_SWEEP_SPEED);
+    motors_set_speed(CALIBRATION_SWEEP_SPEED, -CALIBRATION_SWEEP_SPEED);
 
     start = esp_timer_get_time();
     while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)

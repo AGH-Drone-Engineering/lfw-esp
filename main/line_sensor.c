@@ -11,12 +11,12 @@
 #define SENSOR_SETTLE_DELAY_US (10)
 #define SENSOR_TIMEOUT_US (2500)
 
-#define ON_LINE_THRESHOLD (205)
-#define NOISE_THRESHOLD (21)
+#define ON_LINE_THRESHOLD (500)
+#define NOISE_THRESHOLD (200)
 
 #define CALIBRATION_SAMPLES (10)
 
-#define GET_HIGH_RES_TIME() (((uint32_t) portGET_RUN_TIME_COUNTER_VALUE()) >> 4)
+#define GET_HIGH_RES_TIME() ((uint32_t) portGET_RUN_TIME_COUNTER_VALUE())
 
 
 static const char TAG[] = "line_sensor";
@@ -32,10 +32,10 @@ static const gpio_num_t g_gpios[LINE_SENSOR_N] = {
     GPIO_NUM_16,
 };
 
+static uint32_t g_read_start_us = 0;
 static uint32_t g_read_start = 0;
-static uint32_t g_read_starts[LINE_SENSOR_N] = {0};
 static uint32_t g_pulse_lengths[LINE_SENSOR_N] = {0};
-static volatile int g_n_readings = 0;
+static volatile int g_n_readings = LINE_SENSOR_N;
 
 static uint32_t g_calibration_min[LINE_SENSOR_N];
 static uint32_t g_calibration_max[LINE_SENSOR_N];
@@ -46,7 +46,7 @@ static void IRAM_ATTR gpio_isr_handler(void *arg)
 {
     uint32_t now = GET_HIGH_RES_TIME();
     uint32_t sensor_id = (uint32_t) arg;
-    g_pulse_lengths[sensor_id] = now - g_read_starts[sensor_id];
+    g_pulse_lengths[sensor_id] = now - g_read_start;
     g_n_readings++;
 }
 
@@ -86,13 +86,16 @@ static void sensor_read(uint32_t values[])
     static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
     // spin until all readings complete or timeout
-    while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start < SENSOR_TIMEOUT_US);
+    while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start_us < SENSOR_TIMEOUT_US);
+
+    uint32_t now = GET_HIGH_RES_TIME();
 
     // raise all pins and wait for remaining interrupts to settle
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
         gpio_intr_disable(g_gpios[i]);
         gpio_set_direction(g_gpios[i], GPIO_MODE_OUTPUT);
+        if (g_pulse_lengths[i] == -1) g_pulse_lengths[i] = now - g_read_start;
     }
 
     ets_delay_us(SENSOR_SETTLE_DELAY_US);
@@ -108,13 +111,13 @@ static void sensor_read(uint32_t values[])
 
     // begin next reading
     portENTER_CRITICAL(&mux);
-    g_read_start = (uint32_t) esp_timer_get_time();
+    g_read_start_us = (uint32_t) esp_timer_get_time();
+    g_read_start = GET_HIGH_RES_TIME();
     g_n_readings = 0;
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
         // set max value in case of timeout
         g_pulse_lengths[i] = -1;
-        g_read_starts[i] = GET_HIGH_RES_TIME();
         gpio_set_direction(g_gpios[i], GPIO_MODE_INPUT);
     }
     portEXIT_CRITICAL(&mux);
@@ -181,7 +184,31 @@ void line_sensor_measurement(uint32_t *line_position)
     uint32_t values[LINE_SENSOR_N];
 
     sensor_read(values);
+    
+    // ESP_LOGI(TAG, "Raw: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
+    //     values[0],
+    //     values[1],
+    //     values[2],
+    //     values[3],
+    //     values[4],
+    //     values[5],
+    //     values[6],
+    //     values[7]
+    // );
+
     calibrate_reading(values);
+    
+    // ESP_LOGI(TAG, "Calib: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
+    //     values[0],
+    //     values[1],
+    //     values[2],
+    //     values[3],
+    //     values[4],
+    //     values[5],
+    //     values[6],
+    //     values[7]
+    // );
+    
     update_line_position(line_position, values);
 }
 
@@ -191,21 +218,21 @@ void line_sensor_calibrate(void)
     uint32_t max[LINE_SENSOR_N];
     uint32_t values[LINE_SENSOR_N];
 
-    for (int i = 0; i < CALIBRATION_SAMPLES; i++)
+    for (int sample = 0; sample < CALIBRATION_SAMPLES; sample++)
     {
         sensor_read(values);
 
-        for (int j = 0; j < LINE_SENSOR_N; j++)
+        for (int i = 0; i < LINE_SENSOR_N; i++)
         {
-            if (j == 0)
+            if (sample == 0)
             {
-                min[j] = values[j];
-                max[j] = values[j];
+                min[i] = values[i];
+                max[i] = values[i];
             }
             else
             {
-                if (values[j] < min[j]) min[j] = values[j];
-                if (values[j] > max[j]) max[j] = values[j];
+                if (values[i] < min[i]) min[i] = values[i];
+                if (values[i] > max[i]) max[i] = values[i];
             }
         }
     }
@@ -216,5 +243,27 @@ void line_sensor_calibrate(void)
         if (max[i] < g_calibration_min[i]) g_calibration_min[i] = max[i];
     }
 
-    g_calibrated = true;    
+    g_calibrated = true;
+
+    // ESP_LOGI(TAG, "Calib min: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
+    //     g_calibration_min[0],
+    //     g_calibration_min[1],
+    //     g_calibration_min[2],
+    //     g_calibration_min[3],
+    //     g_calibration_min[4],
+    //     g_calibration_min[5],
+    //     g_calibration_min[6],
+    //     g_calibration_min[7]
+    // );
+
+    // ESP_LOGI(TAG, "Calib max: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
+    //     g_calibration_max[0],
+    //     g_calibration_max[1],
+    //     g_calibration_max[2],
+    //     g_calibration_max[3],
+    //     g_calibration_max[4],
+    //     g_calibration_max[5],
+    //     g_calibration_max[6],
+    //     g_calibration_max[7]
+    // );
 }
