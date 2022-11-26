@@ -9,7 +9,7 @@
 
 
 #define SENSOR_SETTLE_DELAY_US (10)
-#define SENSOR_TIMEOUT_US (1000)
+#define SENSOR_TIMEOUT_US (2500)
 
 #define ON_LINE_THRESHOLD (205)
 #define NOISE_THRESHOLD (21)
@@ -86,8 +86,7 @@ static void sensor_read(uint32_t values[])
     static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
     // spin until all readings complete or timeout
-    while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start < SENSOR_TIMEOUT_US)
-        portYIELD();
+    while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start < SENSOR_TIMEOUT_US);
 
     // raise all pins and wait for remaining interrupts to settle
     portENTER_CRITICAL(&mux);
@@ -149,6 +148,8 @@ void line_sensor_init(void)
     }
 
     gpio_config_t io_conf = {};
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLDOWN_DISABLE;
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
     io_conf.mode = GPIO_MODE_OUTPUT;
     for (int i = 0; i < LINE_SENSOR_N; i++)

@@ -1,5 +1,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <esp_log.h>
 #include <esp_mac.h>
 #include <esp_wifi.h>
@@ -19,6 +20,29 @@
 
 static const char TAG[] = "main";
 
+static SemaphoreHandle_t g_core1_init_done;
+
+
+static void core1_main(void *pv)
+{
+    line_sensor_init();
+    motors_init();
+    turbine_init();
+    control_loop_init();
+
+    xSemaphoreGive(g_core1_init_done);
+
+    ESP_LOGW(TAG, "Will calibrate");
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    control_loop_calibrate();
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+
+    control_loop_start();
+
+    ESP_LOGW(TAG, "LFW running");
+
+    vTaskDelete(0);
+}
 
 void app_main(void)
 {
@@ -35,20 +59,14 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    line_sensor_init();
-    motors_init();
-    turbine_init();
     tcp_server_init();
-    control_loop_init();
 
+    g_core1_init_done = xSemaphoreCreateBinary();
+
+    xTaskCreatePinnedToCore(core1_main, "core1_main", 4096, 0, 7, 0, APP_CPU_NUM);
+
+    while (xSemaphoreTake(g_core1_init_done, portMAX_DELAY) != pdTRUE);
+    
     wifi_man_start();
     tcp_server_start();
-
-    ESP_LOGW(TAG, "Will calibrate");
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-    control_loop_calibrate();
-
-    control_loop_start();
-
-    ESP_LOGW(TAG, "LFW running");
 }

@@ -12,6 +12,7 @@
 
 
 #define CALIBRATION_SWEEP_TIME_US (1000 * 1000)
+#define CALIBRATION_SWEEP_SPEED (600)
 
 #define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 
@@ -30,8 +31,8 @@ static void control_loop_task(void *pv)
     {
         line_sensor_measurement(&line_position);
 
-        // 0 centered, 1.0 per sensor
-        float error = line_position / 1024.f - ((LINE_SENSOR_N - 1) / 2.f);
+        // 0 centered, 1.0 max left/right
+        float error = line_position / ((LINE_SENSOR_N - 1) * 512.f) - 1.f;
 
         float output = turn_pid_update(error);
 
@@ -62,18 +63,22 @@ void control_loop_init(void)
 
 void control_loop_calibrate(void)
 {
+    uint32_t start;
+
     ESP_LOGI(TAG, "Running calibration");
 
-    motors_set_speed(-3000, 3000);
+    motors_set_speed(-CALIBRATION_SWEEP_SPEED, CALIBRATION_SWEEP_SPEED);
 
-    while (esp_timer_get_time() < CALIBRATION_SWEEP_TIME_US)
+    start = esp_timer_get_time();
+    while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
     {
         line_sensor_calibrate();
     }
 
-    motors_set_speed(3000, -3000);
+    motors_set_speed(CALIBRATION_SWEEP_SPEED, -CALIBRATION_SWEEP_SPEED);
 
-    while (esp_timer_get_time() < 2 * CALIBRATION_SWEEP_TIME_US)
+    start = esp_timer_get_time();
+    while (esp_timer_get_time() - start < CALIBRATION_SWEEP_TIME_US)
     {
         line_sensor_calibrate();
     }
