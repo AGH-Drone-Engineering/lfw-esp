@@ -35,7 +35,7 @@ static const gpio_num_t g_gpios[LINE_SENSOR_N] = {
 static uint32_t g_read_start_us = 0;
 static uint32_t g_read_start = 0;
 static uint32_t g_pulse_lengths[LINE_SENSOR_N] = {0};
-static volatile int g_n_readings = LINE_SENSOR_N;
+static volatile int g_n_readings = 0;
 
 static uint32_t g_calibration_min[LINE_SENSOR_N];
 static uint32_t g_calibration_max[LINE_SENSOR_N];
@@ -47,8 +47,8 @@ static void IRAM_ATTR gpio_isr_handler(void *arg)
     uint32_t now = GET_HIGH_RES_TIME();
     uint32_t sensor_id = (uint32_t) arg;
     g_pulse_lengths[sensor_id] = now - g_read_start;
-            g_n_readings++;
-        }
+    g_n_readings++;
+}
 
 static void update_line_position(uint32_t *position, const uint32_t values[])
 {
@@ -83,44 +83,33 @@ static void update_line_position(uint32_t *position, const uint32_t values[])
 
 static void sensor_read(uint32_t values[])
 {
-    static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
- 
-    // spin until all readings complete or timeout
     while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start_us < SENSOR_TIMEOUT_US);
 
-    uint32_t now = GET_HIGH_RES_TIME();
-
-    // raise all pins and wait for remaining interrupts to settle
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
-        gpio_intr_disable(g_gpios[i]);
-        gpio_set_direction(g_gpios[i], GPIO_MODE_OUTPUT);
-        if (g_pulse_lengths[i] == -1) g_pulse_lengths[i] = now - g_read_start;
+        gpio_set_level(g_gpios[i], 0);
+        gpio_set_direction(g_gpios[i], GPIO_MODE_INPUT_OUTPUT);
+    }
+
+    while (g_n_readings < LINE_SENSOR_N);
+
+    for (int i = 0; i < LINE_SENSOR_N; i++)
+    {
+        gpio_set_level(g_gpios[i], 1);
     }
 
     ets_delay_us(SENSOR_SETTLE_DELAY_US);
 
-    // no more interrupts will trigger, safe to read
     memcpy(values, g_pulse_lengths, sizeof(g_pulse_lengths));
 
-    // prepare interrupts
-    for (int i = 0; i < LINE_SENSOR_N; i++)
-    {
-        gpio_intr_enable(g_gpios[i]);
-    }
-
-    // begin next reading
-    portENTER_CRITICAL(&mux);
     g_read_start_us = (uint32_t) esp_timer_get_time();
     g_read_start = GET_HIGH_RES_TIME();
     g_n_readings = 0;
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
-        // set max value in case of timeout
         g_pulse_lengths[i] = -1;
         gpio_set_direction(g_gpios[i], GPIO_MODE_INPUT);
     }
-    portEXIT_CRITICAL(&mux);
 }
 
 static void read_sensor_oversample(uint32_t values[])
@@ -173,7 +162,7 @@ void line_sensor_init(void)
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLDOWN_DISABLE;
     io_conf.intr_type = GPIO_INTR_NEGEDGE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.mode = GPIO_MODE_INPUT_OUTPUT;
     for (int i = 0; i < LINE_SENSOR_N; i++)
     {
         io_conf.pin_bit_mask |= 1ULL << g_gpios[i];
@@ -189,7 +178,6 @@ void line_sensor_init(void)
             gpio_isr_handler,
             (void*) i
         ));
-        ESP_ERROR_CHECK(gpio_intr_disable(g_gpios[i]));
     }
 }
 
