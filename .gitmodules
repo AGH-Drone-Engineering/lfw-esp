@@ -1,0 +1,3 @@
+[submodule "components/esp32-dshot"]
+	path = components/esp32-dshot
+	url = https://github.com/Carbon225/esp32-dshot.git
