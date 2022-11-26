@@ -20,7 +20,6 @@
 
 static const char TAG[] = "control_loop";
 
-// 691
 static QueueHandle_t g_forward_speed;
 static QueueHandle_t g_enable;
 
@@ -119,6 +118,10 @@ void control_loop_init(void)
     io_conf.mode = GPIO_MODE_INPUT;
     io_conf.pin_bit_mask |= 1ULL << GPIO_NUM_0;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    control_loop_set_forward(0.691f);
+    turn_pid_set_p(0.471f);
+    turn_pid_set_d(0.17647f);
 }
 
 void control_loop_calibrate(void)

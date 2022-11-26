@@ -3,9 +3,7 @@
 #include <freertos/FreeRTOS.h>
 
 
-// 471
 static float g_kp = 0.0f;
-// 17647
 static float g_kd = 0.0f;
 
 static float g_last_error1 = 0.0f;
