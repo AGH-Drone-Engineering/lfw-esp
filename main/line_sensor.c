@@ -9,10 +9,10 @@
 
 
 #define SENSOR_SETTLE_DELAY_US (10)
-#define SENSOR_TIMEOUT_US (2500)
+#define SENSOR_TIMEOUT_US (1000)
 
-#define ON_LINE_THRESHOLD (500)
-#define NOISE_THRESHOLD (200)
+#define ON_LINE_THRESHOLD (900)
+#define NOISE_THRESHOLD (500)
 
 #define CALIBRATION_SAMPLES (10)
 
@@ -37,8 +37,8 @@ static uint32_t g_read_start = 0;
 static uint32_t g_pulse_lengths[LINE_SENSOR_N] = {0};
 static volatile int g_n_readings = LINE_SENSOR_N;
 
-static uint32_t g_calibration_min = -1;
-static uint32_t g_calibration_max = 0;
+static uint32_t g_calibration_min[LINE_SENSOR_N];
+static uint32_t g_calibration_max[LINE_SENSOR_N];
 static bool g_calibrated = false;
 
 
@@ -47,8 +47,8 @@ static void IRAM_ATTR gpio_isr_handler(void *arg)
     uint32_t now = GET_HIGH_RES_TIME();
     uint32_t sensor_id = (uint32_t) arg;
     g_pulse_lengths[sensor_id] = now - g_read_start;
-    g_n_readings++;
-}
+            g_n_readings++;
+        }
 
 static void update_line_position(uint32_t *position, const uint32_t values[])
 {
@@ -84,7 +84,7 @@ static void update_line_position(uint32_t *position, const uint32_t values[])
 static void sensor_read(uint32_t values[])
 {
     static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
-
+ 
     // spin until all readings complete or timeout
     while (g_n_readings < LINE_SENSOR_N && (uint32_t) esp_timer_get_time() - g_read_start_us < SENSOR_TIMEOUT_US);
 
@@ -123,6 +123,20 @@ static void sensor_read(uint32_t values[])
     portEXIT_CRITICAL(&mux);
 }
 
+static void read_sensor_oversample(uint32_t values[])
+{
+    uint32_t v1[LINE_SENSOR_N];
+    uint32_t v2[LINE_SENSOR_N];
+
+    sensor_read(v1);
+    sensor_read(v2);
+
+    for (int i = 0; i < LINE_SENSOR_N; i++)
+    {
+        values[i] = v1[i] < v2[i] ? v1[i] : v2[i];
+    }
+}
+
 static void calibrate_reading(uint32_t values[])
 {
     if (!g_calibrated)
@@ -134,9 +148,9 @@ static void calibrate_reading(uint32_t values[])
     {
         for (int i = 0; i < LINE_SENSOR_N; i++)
         {
-            if (values[i] <= g_calibration_min) values[i] = 0;
-            else if (values[i] >= g_calibration_max) values[i] = 1024;
-            else values[i] = ((values[i] - g_calibration_min) << 10) / (g_calibration_max - g_calibration_min);
+            if (values[i] <= g_calibration_min[i]) values[i] = 0;
+            else if (values[i] >= g_calibration_max[i]) values[i] = 1024;
+            else values[i] = ((values[i] - g_calibration_min[i]) << 10) / (g_calibration_max[i] - g_calibration_min[i]);
         }
     }
 }
@@ -147,6 +161,12 @@ void line_sensor_init(void)
     {
         ESP_LOGE(TAG, "ccount not available");
         ESP_ERROR_CHECK(ESP_ERR_NOT_SUPPORTED);
+    }
+
+    for (int i = 0; i < LINE_SENSOR_N; i++)
+    {
+        g_calibration_min[i] = -1;
+        g_calibration_max[i] = 0;
     }
 
     gpio_config_t io_conf = {};
@@ -177,7 +197,7 @@ void line_sensor_measurement(uint32_t *line_position)
 {
     uint32_t values[LINE_SENSOR_N];
 
-    sensor_read(values);
+    read_sensor_oversample(values);
     
     // ESP_LOGI(TAG, "Raw: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
     //     values[0],
@@ -192,7 +212,10 @@ void line_sensor_measurement(uint32_t *line_position)
 
     calibrate_reading(values);
     
-    // ESP_LOGI(TAG, "Calib: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
+    update_line_position(line_position, values);
+
+    // ESP_LOGI(TAG, "%u: %u\t%u\t%u\t%u\t%u\t%u\t%u\t%u",
+    //     *line_position,
     //     values[0],
     //     values[1],
     //     values[2],
@@ -202,22 +225,37 @@ void line_sensor_measurement(uint32_t *line_position)
     //     values[6],
     //     values[7]
     // );
-    
-    update_line_position(line_position, values);
 }
 
 void line_sensor_calibrate(void)
 {
+    uint32_t min[LINE_SENSOR_N];
+    uint32_t max[LINE_SENSOR_N];
     uint32_t values[LINE_SENSOR_N];
 
     for (int sample = 0; sample < CALIBRATION_SAMPLES; sample++)
     {
-        sensor_read(values);
+        read_sensor_oversample(values);
+
         for (int i = 0; i < LINE_SENSOR_N; i++)
         {
-            if (values[i] < g_calibration_min) g_calibration_min = values[i];
-            if (values[i] > g_calibration_max) g_calibration_max = values[i];
+            if (sample == 0)
+            {
+                min[i] = values[i];
+                max[i] = values[i];
+            }
+            else
+            {
+                if (values[i] < min[i]) min[i] = values[i];
+                if (values[i] > max[i]) max[i] = values[i];
+            }
         }
+    }
+
+    for (int i = 0; i < LINE_SENSOR_N; i++)
+    {
+        if (min[i] > g_calibration_max[i]) g_calibration_max[i] = min[i];
+        if (max[i] < g_calibration_min[i]) g_calibration_min[i] = max[i];
     }
 
     g_calibrated = true;
