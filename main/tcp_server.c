@@ -111,19 +111,19 @@ static void tcp_send_task(void *pv)
             switch (msg.type)
             {
                 case MESSAGE_MOTORS:
-                    sprintf(buf, "%u;left_motor;%d\n", msg.timestamp, msg.motors.left);
+                    sprintf(buf, "%u;left_motor;%d\n", (unsigned int) msg.timestamp, msg.motors.left);
                     tcp_send(sock, buf);
-                    sprintf(buf, "%u;right_motor;%d\n", msg.timestamp, msg.motors.right);
+                    sprintf(buf, "%u;right_motor;%d\n", (unsigned int) msg.timestamp, msg.motors.right);
                     tcp_send(sock, buf);
                     break;
 
                 case MESSAGE_ANGLE:
-                    sprintf(buf, "%u;angle;%d\n", msg.timestamp, msg.angle);
+                    sprintf(buf, "%u;angle;%d\n",(unsigned int)  msg.timestamp, msg.angle);
                     tcp_send(sock, buf);
                     break;
 
                 case MESSAGE_TURN:
-                    sprintf(buf, "%u;pid_response;%d\n", msg.timestamp, msg.turn);
+                    sprintf(buf, "%u;pid_response;%d\n", (unsigned int) msg.timestamp, msg.turn);
                     tcp_send(sock, buf);
                     break;
 

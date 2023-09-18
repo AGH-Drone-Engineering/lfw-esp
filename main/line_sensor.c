@@ -6,6 +6,7 @@
 #include <freertos/semphr.h>
 #include <esp_log.h>
 #include <driver/gpio.h>
+#include <esp_timer.h>
 
 
 #define SENSOR_SETTLE_DELAY_US (10)
@@ -98,7 +99,7 @@ static void sensor_read(uint32_t values[])
         gpio_set_level(g_gpios[i], 1);
     }
 
-    ets_delay_us(SENSOR_SETTLE_DELAY_US);
+    esp_rom_delay_us(SENSOR_SETTLE_DELAY_US);
 
     memcpy(values, g_pulse_lengths, sizeof(g_pulse_lengths));
 
